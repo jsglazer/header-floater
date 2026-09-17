@@ -4,7 +4,7 @@
 
 Version: 1.0.0
 
-Closed: 2026-09-17 12:05
+Closed: 2026-09-17 12:10
 
 ## 2026-09-17 — Initial build: replacement for sticky-table-headers 0.3.0
 
@@ -120,3 +120,52 @@ I set up the VaultDEV project folder at `~/VaultDEV/2-Projects/Obsidian/header-f
 - **`Updates/`:** empty, ready for your New Update button.
 
 Your resolver script finds the new project (Dev file, Updates folder, version 1.0.0, repo), so `/dev-deploy header-floater` and `/dev-nextupdate header-floater` will work. I also logged this in the repo's `header-floater-log.md`.
+
+## 2026-09-17 12:10 — Plan: cursor-row and hover-row highlight (no build)
+
+### Prompt
+> if you add a feature that would lightly highlight the row the cursor is in and (different color) the row the mouse is over, how would you build it?  Plan only, no build yet
+
+### Claude output
+- Plan only. No code was changed and the version stays 1.0.0.
+- Proposed building both highlights in pure CSS, with no new JS: `tr:hover` for the mouse row and `tr:focus-within` for the cursor row, since Obsidian's Live Preview table puts the cursor in a small editor inside the cell.
+- Each highlight is a translucent `background-image` layer on the row's `td` cells, so theme striping stays visible underneath. Two new override variables are proposed.
+- Hover is limited to `@media (hover: hover)` so the highlight doesn't stick after a tap on mobile. The cursor highlight applies to Live Preview only, since Reading view has no cursor.
+- The DOM still needs checking in the running Obsidian before building: that focus in a cell really matches `tr:focus-within`, and what happens with multi-cell selections.
+- Open questions for the user: colours, which tables, cursor highlight when the editor loses focus, and source mode.
+
+### Issue / Fix summary
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | User asked how a cursor-row and hover-row highlight would be built | Wrote a plan: a CSS-only design, the checks to run first, the build steps, and the open questions. Nothing built yet |
+
+### Final summary delivered to user (verbatim)
+Plan only. Nothing is built yet, and the version stays at 1.0.0.
+
+**Short version:** both highlights can be done with CSS alone, so no new JavaScript would run while you scroll, type, or move the mouse.
+
+**How it would work**
+- **Mouse row:** CSS already knows which row the mouse is over (`tr:hover`), so it can tint that row. It works in Reading view and Live Preview. It would only apply on devices with a real mouse, so a tap on mobile doesn't leave a row stuck highlighted.
+- **Cursor row:** in Live Preview, clicking into a table puts the cursor in a small editor inside that cell. CSS can see that the row holds the cursor (`tr:focus-within`), so the row stays highlighted as you arrow between cells. Reading view has no cursor, so this is Live Preview only.
+- **Header row:** neither highlight touches it, so the pinned header keeps its look.
+- **Colours:** each highlight is a see-through tint laid over the row, so your theme's striping still shows. A row that is both hovered and holding the cursor shows both tints.
+  - Mouse row: your theme's standard hover shade.
+  - Cursor row: a light tint of your accent colour.
+  - Both can be overridden in a CSS snippet with `--hf-hover-row-background` and `--hf-cursor-row-background`.
+
+**Build steps**
+1. **Check the DOM first** in the running VaultSchar Obsidian, using temporary tabs as before:
+   - Confirm that clicking into a cell makes its row match `:focus-within`.
+   - Check what a multi-cell selection or a whole-table selection does.
+   - Check that editing a cell doesn't redraw the row and drop the highlight.
+   - If focus doesn't reach the row, fall back to one lightweight focus listener that adds a class to the row, costing one lookup per cell change.
+2. Add the rules and the two variables to `styles.css`, at a lower layer than the pinned header.
+3. Test it live: hover and cursor in both views, dark mode, wide tables, the pinned header, and disabling the plugin.
+4. Update the README, bump to 1.0.1 (and the Dev file's `Version:`), commit, push, and deploy to VaultSchar.
+
+**Questions before building**
+1. **Cursor leaves the editor:** when you click into the sidebar, should the cursor row stay highlighted? CSS alone clears it; keeping it needs a small listener.
+2. **Which tables:** all tables, including callouts and embeds (easy for hover), or only the top-level tables that pin?
+3. **Source mode:** should the cursor's table line also be highlighted there? That would need an editor decoration, which is more work.
+4. **Settings:** are CSS variables enough, or do you want on/off toggles and colour pickers in a settings tab?
+5. **Plugin name:** does this belong in Header Floater, given the name, or in a separate plugin?
