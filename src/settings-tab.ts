@@ -13,6 +13,13 @@ export class HeaderFloaterSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		new Setting(containerEl).setName("Floating headers").setHeading();
+
+		new Setting(containerEl)
+			.setName("Tables in rendered blocks")
+			.setDesc("Also float the headers of tables drawn by code blocks, such as Dataview. Markdown tables always float.")
+			.addToggle((toggle) => toggle.setValue(this.plugin.settings.renderedBlocks).onChange((value) => this.apply({ renderedBlocks: value })));
+
 		new Setting(containerEl).setName("Row highlights").setHeading();
 
 		new Setting(containerEl)

@@ -264,3 +264,97 @@ Logged in `header-floater-log.md`, and the Dev file version is now 1.0.1.
 
 ### Final summary delivered to user (verbatim)
 Glad it's working. Happy highlighting!
+
+## 2026-09-17 — Plan: floating headers for Dataview tables (plan only, nothing built)
+
+### Prompt
+> tables like the ones on this page don't benefit from the the header-floater plugin you built. is there a way to get these table headers to float? Plan only, build nothing now
+> /Users/josh/VaultSchar/Classes/2026-B/Econ - PUBP 720/Econ - PUBP 720 Progress.md
+
+### Claude output
+- Read the note, `Views/inventory-progress.js`, `Views/_viewcache.js`, the plugin source (`src/main.ts`, `src/table-watcher.ts`, `src/fit-tracker.ts`, `styles.css`) and Dataview's `styles.css`. No code or notes were changed; no version bump, no commit.
+- Plan and diagnosis are in the final summary below.
+
+### Final summary delivered to user (verbatim)
+Yes, it can be done. It needs the plugin to find tables by what they are, not by where they sit on the page.
+
+**Why these tables don't float**
+Everything below the two small legend tables on that page is drawn by `dv.view('Views/inventory-progress')`. The plugin misses those tables for three reasons:
+1. **It never finds them.** In Reading view, the plugin only picks up a page block that holds a bare table and nothing else. A Dataview block holds a script container, and the tables are added later, after the script finishes. In Live Preview, the plugin only watches table widgets, and a Dataview block is a different kind of widget.
+2. **The CSS rules don't match them.** Every sticky rule is written for a fixed spot: `sizer > div.hf-pin > table` in Reading view, or `.cm-table-widget > .table-wrapper > table` in Live Preview. Dataview tables sit a few levels deeper, inside `div.block-language-dataviewjs`.
+3. **A wrapper may cut them off.** A sticky header only floats if nothing between the table and the pane's scroll area clips or scrolls. Code-block widgets and Dataview's own CSS may do that. For example, Dataview gives `.block-language-dataview` `overflow-y: auto`. I haven't checked the `dataviewjs` wrappers yet; the first step does that.
+
+**Plan**
+0. **Quick test (about 10 minutes, no code).** Open that page in DevTools and set `position: sticky; top: 0` on one Dataview `th`. Walk up from the table and note every parent whose `overflow` isn't `visible`, in both views. This tells us whether step 3 is needed at all.
+1. **Mark tables with a class.** When the tracker approves a table, it adds `hf-table` to it. The sticky, background and alt-column rules then target `table.hf-table > thead > tr > th` wherever the table sits. The existing Markdown tables get the same class, so both cases share one set of rules.
+2. **Find tables inside rendered blocks.**
+   - **Reading view:** the Markdown post-processor also accepts page blocks that contain a code-block container. It attaches one `MutationObserver` (child and subtree changes) to each such block, and the observer tracks `table`s as they appear or disappear.
+   - **Live Preview:** `tableWatcher` also picks up `.cm-preview-code-block` / `.cm-embed-block` widgets and gives them the same kind of observer.
+   - **Cost:** the observers only fire when a block re-renders. Nothing runs on scroll. This also covers `_viewcache`'s approach of building a view off-page and then swapping it in: removed tables stop being tracked, and new ones start.
+3. **Remove clipping only when it's safe.** For each tracked table, the tracker walks up to the pane's scroll area and collects any parent that clips or scrolls. If the table fits its width, those parents get `hf-pin` (so `overflow: visible`). If it's too wide, nothing changes: it keeps scrolling sideways and its header doesn't float, same as today. This reuses the existing fit check and the one `ResizeObserver`.
+4. **Offsets.** Same scroll areas, so the existing `--hf-rv-offset` / `--hf-lp-offset` values work unchanged.
+5. **Limits.**
+   - Only tables in the main note count; embeds, canvas cards and hover previews stay excluded, as now.
+   - Tables inside callouts or `%% col-break %%` column layouts are out of scope for now. Their clipping is on purpose.
+   - A Dataview header will float only while its own table is on screen, then scroll away with it. That's the right behaviour for a page with several small tables.
+6. **Setting.** Add a toggle, "Float headers in rendered blocks (Dataview, etc.)", on by default.
+7. **Tests.** Add unit tests for the parent-clipping walk and for tracking tables that are added and removed. Then check it in the running app, in both views, on the Econ Progress page, including a re-render after editing an item note.
+
+**Simpler option:** if step 0 shows no clipping parents, a CSS snippet of about 10 lines targeting `.block-language-dataviewjs table.table-view-table > thead th` would float these headers today. It would have no width check, so a wide Dataview table could break. That's fine as a stopgap, but the plugin route is more reliable.
+
+Plan logged in `header-floater-log.md`; nothing built, no version bump.
+
+## 2026-09-17 13:45 — v1.0.2: floating headers for Dataview tables
+
+### Prompt
+> build it
+
+### Claude output
+- **Step 0 (DOM check), both views:** the only clipping element around a Dataview table is the code block's root `div.block-language-dataviewjs`, which carries an inline `overflow-x: auto`. Each Dataview table sits alone in its own wrapper div. The Live Preview widget (`.cm-preview-code-block`) has `contain: paint`, which doesn't block pinning.
+- **`src/block-hosts.ts` (new):** `BlockHosts` watches each code-block host (the Reading view `el-pre` section or the Live Preview `.cm-preview-code-block` widget). It watches direct children only, finds the `.block-language-*` root when it appears or is replaced, and hands it to the tracker as a "block" box while the setting is on.
+- **`src/fit-tracker.ts`:** boxes are now `"table"` (Markdown, unchanged behaviour) or `"block"` (any number of tables, plus a MutationObserver for redraws). Fitting tables get `hf-table`, the box gets `hf-pin`, and a wide table inside a pinned block gets `hf-scroll` on its own wrapper so it scrolls sideways alone. Measurements happen in the ResizeObserver callback, while elements are laid out. Class writes happen on the next frame of the box's own window, which avoids the browser's "ResizeObserver loop" warning, and a stale plan is dropped. Disconnected boxes are skipped rather than untracked, because Reading view detaches and reattaches sections.
+- **`src/core/fit.ts`:** `planBlock()` decides pin and per-table fit for a block. There are 4 new unit tests, plus the settings tests updated for the new field (16 tests pass).
+- **`src/table-watcher.ts`, `src/main.ts`:** Live Preview code-block widgets and Reading view `el-pre` sections are handed to `BlockHosts`. `instanceof` checks became tag and nodeType checks, because popout windows have their own constructors.
+- **`styles.css`:** the sticky rules now target `.hf-pin table.hf-table` instead of fixed layout paths, `.hf-scroll` gets `overflow-x: auto`, and pinned Live Preview code-block widgets override Obsidian's `.cm-embed-block:not(.cm-table-widget):hover { overflow: hidden }`.
+- **Setting:** "Tables in rendered blocks" (on by default) under a new "Floating headers" heading.
+- **Version:** 1.0.2 (manifest, package.json, versions.json, Dev file). README updated. Built, deployed to VaultSchar, reloaded.
+- **Verified in running Obsidian:**
+  - Dataview headers float in Reading view and Live Preview, including with `:hover` forced on the widget through the DevTools Protocol.
+  - A narrow popout made the Summary table too wide: it scrolled on its own while the other tables pinned.
+  - Pinning survives `dataview:refresh-views`, and the setting toggles classes off and back on.
+  - Markdown legend tables still pin in both views.
+  - No errors or warnings from the plugin. The only errors came from advanced-canvas reacting to popouts.
+- **Note:** my first mode-switch probe ran on whichever tab was active after the user switched tabs, so it briefly flipped the note `pubp720-cpicvnomyrs` between views; it ended in Live Preview. All later tests used a popout or a temporary tab that was closed with focus restored.
+- **Known limit:** in a popout window, if the main window is fully covered, resize notifications can be delayed. That was already true in 1.0.1.
+
+| # | Issue | Fix |
+|---|---|---|
+| 1 | Dataview tables never tracked (post-processor and watcher only handled bare Markdown tables) | `BlockHosts` finds `.block-language-*` roots in Reading view sections and Live Preview code-block widgets |
+| 2 | Sticky CSS tied to fixed Markdown table paths | Rules target `hf-pin` / `hf-table` classes set by the tracker |
+| 3 | Code block root has inline `overflow-x: auto`, blocking sticky | Pinned block gets `overflow: visible !important` |
+| 4 | One wide table in a block would block pinning for all its tables | `planBlock`: wide tables with their own wrapper scroll sideways via `hf-scroll`; the rest pin |
+| 5 | Hovering a Live Preview code block sets `overflow: hidden` (Obsidian app.css), killing the float | Override on `.cm-preview-code-block:has(> .hf-pin)` |
+| 6 | Class writes inside ResizeObserver callback caused "ResizeObserver loop" warning | Measure in callback, apply classes next frame on the box's own window |
+| 7 | `instanceof` checks fail for popout-window elements | Tag name / nodeType checks |
+| 8 | Dataview redraws replace tables without resizing the block | MutationObserver per block box re-checks on child-list changes |
+
+### Final summary delivered to user (verbatim)
+Header Floater 1.0.2 is deployed and reloaded in VaultSchar. On your Econ PUBP 720 Progress page, the Dataview table headers now stay at the top of the pane as you scroll, in both Reading view and Live Preview. The new code is pushed to GitHub.
+
+**What changed**
+- **Dataview tables are found.** The plugin now watches code blocks as well as plain Markdown tables. It picks up the tables a `dataviewjs` block draws and starts tracking them again whenever Dataview redraws them.
+- **One wide table no longer blocks the rest.** Every table that fits gets a floating header. A table too wide for the pane scrolls sideways on its own. I checked this in a narrow window, where the 12-column Summary table was too wide.
+- **Setting:** a new toggle, "Tables in rendered blocks", under Settings → Header Floater. It's on by default.
+
+**Two problems found and fixed while testing**
+- **Hovering broke it in Live Preview.** Obsidian's own CSS sets a code block to `overflow: hidden` while the mouse is over it, which stopped the header floating exactly when you'd be reading the table. The plugin now overrides that for blocks whose headers float. The hover shadow still shows.
+- **A new console warning** ("ResizeObserver loop") came from the first version of this change. It's gone now.
+
+**Verified in your running Obsidian**
+- Headers float in both views, including with hover forced on in Live Preview.
+- Floating still works after a Dataview refresh, and the setting turns it off and back on cleanly.
+- The two legend tables at the bottom still float, and the plugin logged no errors.
+
+**One thing to know:** while you switched tabs during my first test, my view-mode toggles landed on your note `pubp720-cpicvnomyrs`. It ended in Live Preview, and its content wasn't changed. After that I tested only in popouts and temporary tabs, and focus went back to your tab each time.
+
+Logged in `header-floater-log.md`, and the Dev file version is now 1.0.2.

@@ -11,7 +11,8 @@ Obsidian makes each table's box scroll sideways (a stylesheet rule in Live Previ
 - **Tables that fit the pane** pin their header.
 - **Wide tables** keep their normal sideways scrolling and don't pin.
 - **Source mode** is untouched, since tables there are plain Markdown text.
-- **Only top-level tables pin.** Tables inside callouts, embeds, or canvas cards are left alone.
+- **Tables drawn by code blocks pin too**, such as the tables a `dataview` or `dataviewjs` block renders. A block can hold several tables: those that fit pin their headers, and a wide one scrolls sideways in its own row instead of blocking the rest. Turn this off under **Settings → Header Floater → Tables in rendered blocks**.
+- **Only top-level tables and code blocks pin.** Tables inside callouts, embeds, or canvas cards are left alone.
 
 The pinned header gets your theme's background colour, so it works in both light and dark mode.
 
@@ -32,8 +33,8 @@ Both are CSS only: the plugin switches a class on `body`, and no code runs as yo
 |---|---|
 | Work on scroll | None |
 | Listener growth over a session | None. Tables are tracked per rendered section or editor and released when it goes away |
-| Layout reads | Only when a table or its box changes size, and only for that table |
-| Editor typing | Not observed. Only top-level CodeMirror blocks being added or removed are watched |
+| Layout reads | Only when a table or its box changes size, or a rendered code block redraws, and only for that box |
+| Editor typing | Not observed. Only top-level CodeMirror blocks being added or removed, and the contents of rendered code blocks, are watched |
 | Unload | Disconnects every observer and removes all classes and CSS variables |
 
 ## Customising

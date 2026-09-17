@@ -1,6 +1,6 @@
 {
 	"name": "header-floater",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Pins table header rows to the top of the pane while you scroll long tables in Obsidian.",
 	"main": "main.js",
 	"scripts": {

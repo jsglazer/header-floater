@@ -1,4 +1,6 @@
 export interface HeaderFloaterSettings {
+	/** Float the headers of tables drawn inside rendered code blocks, such as Dataview. */
+	renderedBlocks: boolean;
 	/** Tint the Live Preview table row that holds the cursor. */
 	activeRow: boolean;
 	/** Tint the table row under the mouse. */
@@ -10,6 +12,7 @@ export interface HeaderFloaterSettings {
 }
 
 export const DEFAULT_SETTINGS: HeaderFloaterSettings = {
+	renderedBlocks: true,
 	activeRow: true,
 	mouseRow: true,
 	activeRowColor: "",
@@ -25,9 +28,10 @@ export function isHexColor(value: unknown): value is string {
 /** Builds settings from saved data, falling back to defaults for anything missing or malformed. */
 export function loadSettings(data: unknown): HeaderFloaterSettings {
 	const saved = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
-	const bool = (key: "activeRow" | "mouseRow") => (typeof saved[key] === "boolean" ? (saved[key] as boolean) : DEFAULT_SETTINGS[key]);
+	const bool = (key: "renderedBlocks" | "activeRow" | "mouseRow") => (typeof saved[key] === "boolean" ? (saved[key] as boolean) : DEFAULT_SETTINGS[key]);
 	const color = (key: "activeRowColor" | "mouseRowColor") => (isHexColor(saved[key]) ? (saved[key] as string).toLowerCase() : "");
 	return {
+		renderedBlocks: bool("renderedBlocks"),
 		activeRow: bool("activeRow"),
 		mouseRow: bool("mouseRow"),
 		activeRowColor: color("activeRowColor"),

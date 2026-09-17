@@ -6,15 +6,25 @@ body {
 	--hf-z-index: 3;
 }
 
-/* Obsidian makes every table's box scroll sideways (a stylesheet rule in Live Preview, an inline style in Reading view), which blocks pinning. Boxes the plugin marks as fitting their width drop it; wide tables keep scrolling and don't pin. */
-.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin,
-.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin {
+/* Obsidian makes every table's box scroll sideways (a stylesheet rule in Live Preview, an inline style in Reading view), and does the same to rendered code blocks such as Dataview, which blocks pinning. Boxes the plugin marks as fitting their width drop it; wide tables keep scrolling and don't pin. The plugin only marks top-level tables and code blocks: callouts and embeds have their own clipping and scrolling. */
+.markdown-source-view.mod-cm6.is-live-preview .hf-pin,
+.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer .hf-pin {
 	overflow: visible !important;
 }
 
-/* Top-level tables only: callouts and embeds have their own clipping and scrolling. */
-.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin > table > thead > tr > th,
-.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th {
+/* Obsidian clips a hovered Live Preview code-block widget (overflow: hidden, for its rounded hover shadow), which would stop its headers pinning exactly while the pointer is over the table. */
+.markdown-source-view.mod-cm6.is-live-preview .cm-preview-code-block:has(> .hf-pin) {
+	overflow: visible !important;
+}
+
+/* A wide table inside a pinned block scrolls sideways on its own instead of spilling past the pane. */
+.markdown-source-view.mod-cm6.is-live-preview .hf-pin .hf-scroll,
+.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer .hf-pin .hf-scroll {
+	overflow-x: auto;
+}
+
+.markdown-reading-view .hf-pin table.hf-table > thead > tr > th,
+.markdown-source-view.mod-cm6.is-live-preview .hf-pin table.hf-table > thead > tr > th {
 	position: sticky;
 	z-index: var(--hf-z-index);
 	/* Theme header tint layered over a solid base, matching the unpinned look. */
@@ -24,16 +34,16 @@ body {
 	box-shadow: inset 0 calc(-1 * var(--table-border-width, 1px)) 0 var(--table-header-border-color, var(--table-border-color));
 }
 
-.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin > table > thead > tr > th:nth-child(2n + 2),
-.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th:nth-child(2n + 2) {
+.markdown-reading-view .hf-pin table.hf-table > thead > tr > th:nth-child(2n + 2),
+.markdown-source-view.mod-cm6.is-live-preview .hf-pin table.hf-table > thead > tr > th:nth-child(2n + 2) {
 	background-image: linear-gradient(var(--table-column-alt-background), var(--table-column-alt-background)), linear-gradient(var(--table-header-background), var(--table-header-background));
 }
 
-.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin > table > thead > tr > th {
+.markdown-reading-view .hf-pin table.hf-table > thead > tr > th {
 	top: calc(-1 * var(--hf-rv-offset, var(--file-margins-y, 0px)));
 }
 
-.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th {
+.markdown-source-view.mod-cm6.is-live-preview .hf-pin table.hf-table > thead > tr > th {
 	top: calc(-1 * var(--hf-lp-offset, var(--file-margins-y, 0px)));
 }
 

@@ -25,8 +25,50 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian2 = require("obsidian");
 
+// src/block-hosts.ts
+var BLOCK_ROOT = ':scope > [class*="block-language-"]';
+var BlockHosts = class {
+  constructor(tracker, enabled) {
+    this.tracker = tracker;
+    this.enabled = enabled;
+    this.hosts = /* @__PURE__ */ new Map();
+  }
+  add(host) {
+    if (this.hosts.has(host)) return;
+    const observer = new MutationObserver(() => this.sync(host));
+    observer.observe(host, { childList: true });
+    this.hosts.set(host, { observer, box: null });
+    this.sync(host);
+  }
+  remove(host) {
+    const entry = this.hosts.get(host);
+    if (!entry) return;
+    entry.observer.disconnect();
+    if (entry.box) this.tracker.untrack(entry.box);
+    this.hosts.delete(host);
+  }
+  setEnabled(enabled) {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    this.hosts.forEach((_, host) => this.sync(host));
+  }
+  dispose() {
+    Array.from(this.hosts.keys()).forEach((host) => this.remove(host));
+  }
+  sync(host) {
+    const entry = this.hosts.get(host);
+    if (!entry) return;
+    const box = this.enabled ? host.querySelector(BLOCK_ROOT) : null;
+    if (box === entry.box) return;
+    if (entry.box) this.tracker.untrack(entry.box);
+    if (box) this.tracker.track(box, "block");
+    entry.box = box;
+  }
+};
+
 // src/core/settings.ts
 var DEFAULT_SETTINGS = {
+  renderedBlocks: true,
   activeRow: true,
   mouseRow: true,
   activeRowColor: "",
@@ -41,6 +83,7 @@ function loadSettings(data) {
   const bool = (key) => typeof saved[key] === "boolean" ? saved[key] : DEFAULT_SETTINGS[key];
   const color = (key) => isHexColor(saved[key]) ? saved[key].toLowerCase() : "";
   return {
+    renderedBlocks: bool("renderedBlocks"),
     activeRow: bool("activeRow"),
     mouseRow: bool("mouseRow"),
     activeRowColor: color("activeRowColor"),
@@ -67,63 +110,139 @@ function shouldPin(tableWidth, availableWidth) {
 function innerWidth(clientWidth, paddingStart, paddingEnd) {
   return clientWidth - (parseFloat(paddingStart) || 0) - (parseFloat(paddingEnd) || 0);
 }
+function planBlock(tables, availableWidth) {
+  const fits = tables.map((table) => shouldPin(table.width, availableWidth));
+  const pin = availableWidth > 0 && fits.some(Boolean) && tables.every((table, i) => fits[i] || table.ownWrapper);
+  return { pin, fits };
+}
 
 // src/fit-tracker.ts
 var PIN_CLASS = "hf-pin";
-var CONTENT = ":scope > .table-wrapper, :scope > table";
+var TABLE_CLASS = "hf-table";
+var SCROLL_CLASS = "hf-scroll";
+var TABLE_CONTENT = ":scope > .table-wrapper, :scope > table";
+var NESTED_SCOPE = "table, .callout, .internal-embed, .markdown-embed";
+function tableOf(content) {
+  return content.tagName === "TABLE" ? content : content.querySelector(":scope > table");
+}
+function blockTables(box) {
+  return Array.from(box.querySelectorAll("table")).filter((table) => {
+    var _a;
+    const outer = (_a = table.parentElement) == null ? void 0 : _a.closest(NESTED_SCOPE);
+    return !outer || !box.contains(outer);
+  });
+}
 var FitTracker = class {
   constructor() {
-    // Tracked box -> the content element currently observed inside it.
-    this.contentOf = /* @__PURE__ */ new Map();
+    this.boxes = /* @__PURE__ */ new Map();
+    // Observed content element -> the box it belongs to.
+    this.ownerOf = /* @__PURE__ */ new Map();
+    // Class writes waiting for the next frame. Checks measure inside the ResizeObserver callback, while the elements are laid out, but toggling classes there resizes observed elements and trips the browser's resize-loop guard.
+    this.pending = /* @__PURE__ */ new Map();
+    // One frame per window: a popout's boxes wait on its own frames, which keep running while the main window is covered and throttled.
+    this.frames = /* @__PURE__ */ new Map();
     this.observer = new ResizeObserver((entries) => {
-      const boxes = /* @__PURE__ */ new Set();
+      const due = /* @__PURE__ */ new Set();
       for (const { target } of entries) {
         const el = target;
-        const box = this.contentOf.has(el) ? el : el.parentElement;
-        if (box && this.contentOf.has(box)) boxes.add(box);
+        const box = this.boxes.has(el) ? el : this.ownerOf.get(el);
+        if (box) due.add(box);
       }
-      boxes.forEach((box) => this.check(box));
+      for (const box of due) {
+        const plan = this.measure(box);
+        if (!plan) continue;
+        this.pending.set(box, plan);
+        const win = box.ownerDocument.defaultView;
+        if (win && !this.frames.has(win)) this.frames.set(win, win.requestAnimationFrame(() => this.flush(win)));
+      }
     });
   }
-  track(box) {
-    if (this.contentOf.has(box)) return;
-    this.contentOf.set(box, null);
+  track(box, kind = "table") {
+    if (this.boxes.has(box)) return;
+    let mutations = null;
+    if (kind === "block") {
+      mutations = new MutationObserver(() => this.check(box));
+      mutations.observe(box, { childList: true, subtree: true });
+    }
+    this.boxes.set(box, { kind, contents: [], mutations });
     this.observer.observe(box);
   }
   untrack(box) {
-    if (!this.contentOf.has(box)) return;
-    const content = this.contentOf.get(box);
-    if (content) this.observer.unobserve(content);
+    var _a;
+    const state = this.boxes.get(box);
+    if (!state) return;
+    (_a = state.mutations) == null ? void 0 : _a.disconnect();
+    for (const content of state.contents) this.release(content);
     this.observer.unobserve(box);
-    this.contentOf.delete(box);
+    this.boxes.delete(box);
+    this.pending.delete(box);
+    box.classList.remove(PIN_CLASS);
   }
   dispose() {
+    this.frames.forEach((frame, win) => win.cancelAnimationFrame(frame));
+    this.frames.clear();
+    this.pending.clear();
+    Array.from(this.boxes.keys()).forEach((box) => this.untrack(box));
     this.observer.disconnect();
-    this.contentOf.forEach((_, box) => box.classList.remove(PIN_CLASS));
-    this.contentOf.clear();
   }
+  release(content) {
+    var _a, _b;
+    this.observer.unobserve(content);
+    this.ownerOf.delete(content);
+    (_a = tableOf(content)) == null ? void 0 : _a.classList.remove(TABLE_CLASS);
+    (_b = content.parentElement) == null ? void 0 : _b.classList.remove(SCROLL_CLASS);
+  }
+  flush(win) {
+    this.frames.delete(win);
+    this.pending.forEach((plan, box) => {
+      if (box.ownerDocument.defaultView !== win) return;
+      this.pending.delete(box);
+      this.apply(box, plan);
+    });
+  }
+  /** Measures and applies at once, for callers outside a ResizeObserver callback. */
   check(box) {
-    var _a;
-    if (!box.isConnected) {
-      this.untrack(box);
-      return;
+    const plan = this.measure(box);
+    if (plan) this.apply(box, plan);
+  }
+  measure(box) {
+    const state = this.boxes.get(box);
+    if (!state || !box.isConnected) return null;
+    const current = state.kind === "block" ? blockTables(box) : Array.from(box.querySelectorAll(TABLE_CONTENT)).slice(0, 1);
+    for (const old of state.contents) if (!current.includes(old)) this.release(old);
+    for (const content of current) {
+      if (this.ownerOf.has(content)) continue;
+      this.ownerOf.set(content, box);
+      this.observer.observe(content);
     }
-    let content = (_a = this.contentOf.get(box)) != null ? _a : null;
-    if (!content || content.parentElement !== box) {
-      const current = box.querySelector(CONTENT);
-      if (current !== content) {
-        if (content) this.observer.unobserve(content);
-        if (current) this.observer.observe(current);
-        content = current;
-        this.contentOf.set(box, current);
-      }
+    state.contents = current;
+    const style = getComputedStyle(box);
+    const available = innerWidth(box.clientWidth, style.paddingLeft, style.paddingRight);
+    let pin;
+    let fits;
+    if (state.kind === "block") {
+      ({ pin, fits } = planBlock(
+        current.map((table) => {
+          var _a;
+          return { width: table.offsetWidth, ownWrapper: table.parentElement !== box && ((_a = table.parentElement) == null ? void 0 : _a.childElementCount) === 1 };
+        }),
+        available
+      ));
+    } else {
+      pin = current.length > 0 && shouldPin(current[0].offsetWidth, available);
+      fits = [pin];
     }
-    let pin = false;
-    if (content) {
-      const style = getComputedStyle(box);
-      pin = shouldPin(content.offsetWidth, innerWidth(box.clientWidth, style.paddingLeft, style.paddingRight));
-    }
+    return { contents: current, pin, fits };
+  }
+  apply(box, { contents, pin, fits }) {
+    const state = this.boxes.get(box);
+    if (!state || state.contents !== contents) return;
     if (box.classList.contains(PIN_CLASS) !== pin) box.classList.toggle(PIN_CLASS, pin);
+    contents.forEach((content, i) => {
+      var _a, _b;
+      (_a = tableOf(content)) == null ? void 0 : _a.classList.toggle(TABLE_CLASS, pin && fits[i]);
+      if (state.kind === "block") (_b = content.parentElement) == null ? void 0 : _b.classList.toggle(SCROLL_CLASS, pin && !fits[i]);
+    });
   }
 };
 
@@ -137,6 +256,8 @@ var HeaderFloaterSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
+    new import_obsidian.Setting(containerEl).setName("Floating headers").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Tables in rendered blocks").setDesc("Also float the headers of tables drawn by code blocks, such as Dataview. Markdown tables always float.").addToggle((toggle) => toggle.setValue(this.plugin.settings.renderedBlocks).onChange((value) => this.apply({ renderedBlocks: value })));
     new import_obsidian.Setting(containerEl).setName("Row highlights").setHeading();
     new import_obsidian.Setting(containerEl).setName("Active row highlight").setDesc("Tint the table row that holds the cursor while you edit a table in Live Preview.").addToggle((toggle) => toggle.setValue(this.plugin.settings.activeRow).onChange((value) => this.apply({ activeRow: value })));
     this.colorSetting("Active row colour", "activeRowColor", "accent");
@@ -177,39 +298,52 @@ var HeaderFloaterSettingTab = class extends import_obsidian.PluginSettingTab {
 // src/table-watcher.ts
 var import_view = require("@codemirror/view");
 var WIDGET_CLASS = "cm-table-widget";
+var BLOCK_CLASS = "cm-preview-code-block";
 var MAIN_SCROLLER = ".view-content > .markdown-source-view.mod-cm6 > .cm-editor > .cm-scroller";
 function isWidget(node) {
-  return node instanceof HTMLElement && node.classList.contains(WIDGET_CLASS);
+  return node.nodeType === Node.ELEMENT_NODE && node.classList.contains(WIDGET_CLASS);
 }
-function tableWatcher(tracker) {
+function isBlock(node) {
+  return node.nodeType === Node.ELEMENT_NODE && node.classList.contains(BLOCK_CLASS);
+}
+function tableWatcher(tracker, blocks) {
   return import_view.ViewPlugin.fromClass(
     class {
       constructor(view) {
         this.view = view;
         this.mutations = null;
         this.widgets = /* @__PURE__ */ new Set();
+        this.hosts = /* @__PURE__ */ new Set();
         this.startFrame = requestAnimationFrame(() => this.start());
       }
       start() {
         if (!this.view.scrollDOM.matches(MAIN_SCROLLER)) return;
         this.mutations = new MutationObserver((records) => {
           for (const record of records) {
-            record.removedNodes.forEach((node) => isWidget(node) && this.forget(node));
-            record.addedNodes.forEach((node) => isWidget(node) && this.track(node));
+            record.removedNodes.forEach((node) => this.forget(node));
+            record.addedNodes.forEach((node) => this.track(node));
           }
         });
         this.mutations.observe(this.view.contentDOM, { childList: true });
-        for (const child of Array.from(this.view.contentDOM.children)) {
-          if (isWidget(child)) this.track(child);
+        for (const child of Array.from(this.view.contentDOM.children)) this.track(child);
+      }
+      track(node) {
+        if (isWidget(node)) {
+          this.widgets.add(node);
+          tracker.track(node);
+        } else if (isBlock(node)) {
+          this.hosts.add(node);
+          blocks.add(node);
         }
       }
-      track(widget) {
-        this.widgets.add(widget);
-        tracker.track(widget);
-      }
-      forget(widget) {
-        this.widgets.delete(widget);
-        tracker.untrack(widget);
+      forget(node) {
+        if (isWidget(node)) {
+          this.widgets.delete(node);
+          tracker.untrack(node);
+        } else if (isBlock(node)) {
+          this.hosts.delete(node);
+          blocks.remove(node);
+        }
       }
       destroy() {
         var _a;
@@ -217,6 +351,8 @@ function tableWatcher(tracker) {
         (_a = this.mutations) == null ? void 0 : _a.disconnect();
         this.widgets.forEach((widget) => tracker.untrack(widget));
         this.widgets.clear();
+        this.hosts.forEach((host) => blocks.remove(host));
+        this.hosts.clear();
       }
     }
   );
@@ -239,6 +375,18 @@ var TrackedTable = class extends import_obsidian2.MarkdownRenderChild {
     this.tracker.untrack(this.containerEl);
   }
 };
+var TrackedBlockHost = class extends import_obsidian2.MarkdownRenderChild {
+  constructor(containerEl, blocks) {
+    super(containerEl);
+    this.blocks = blocks;
+  }
+  onload() {
+    this.blocks.add(this.containerEl);
+  }
+  onunload() {
+    this.blocks.remove(this.containerEl);
+  }
+};
 var HeaderFloaterPlugin = class extends import_obsidian2.Plugin {
   constructor() {
     super(...arguments);
@@ -251,6 +399,7 @@ var HeaderFloaterPlugin = class extends import_obsidian2.Plugin {
   }
   async onload() {
     this.settings = loadSettings(await this.loadData());
+    this.blocks = new BlockHosts(this.tracker, this.settings.renderedBlocks);
     this.addSettingTab(new HeaderFloaterSettingTab(this.app, this));
     this.bodies.add(document.body);
     this.registerEvent(
@@ -271,11 +420,12 @@ var HeaderFloaterPlugin = class extends import_obsidian2.Plugin {
       name: "Toggle Mouse Row Highlight",
       callback: () => this.toggle("mouseRow", "Mouse row highlight")
     });
-    this.registerEditorExtension(tableWatcher(this.tracker));
+    this.registerEditorExtension(tableWatcher(this.tracker, this.blocks));
     this.registerMarkdownPostProcessor((el, ctx) => {
-      if (el.childElementCount === 1 && el.firstElementChild instanceof HTMLTableElement) {
-        ctx.addChild(new TrackedTable(el, this.tracker));
-      }
+      var _a;
+      if (el.childElementCount !== 1) return;
+      if (((_a = el.firstElementChild) == null ? void 0 : _a.tagName) === "TABLE") ctx.addChild(new TrackedTable(el, this.tracker));
+      else if (el.classList.contains("el-pre")) ctx.addChild(new TrackedBlockHost(el, this.blocks));
     });
     const sync = () => this.syncOffsets();
     this.app.workspace.onLayoutReady(sync);
@@ -290,9 +440,11 @@ var HeaderFloaterPlugin = class extends import_obsidian2.Plugin {
       for (const name of Object.keys(vars)) body.style.removeProperty(name);
     }
     this.bodies.clear();
+    this.blocks.dispose();
     this.tracker.dispose();
     for (const { name } of OFFSETS) document.body.style.removeProperty(name);
     document.querySelectorAll(`.${PIN_CLASS}`).forEach((el) => el.classList.remove(PIN_CLASS));
+    for (const name of [TABLE_CLASS, SCROLL_CLASS]) document.querySelectorAll(`.${name}`).forEach((el) => el.classList.remove(name));
   }
   syncOffsets() {
     const body = document.body;
@@ -305,6 +457,7 @@ var HeaderFloaterPlugin = class extends import_obsidian2.Plugin {
   }
   updateSettings(patch) {
     this.settings = { ...this.settings, ...patch };
+    this.blocks.setEnabled(this.settings.renderedBlocks);
     this.applyHighlights();
     this.requestSave();
   }

@@ -8,11 +8,11 @@ describe("loadSettings", () => {
 	});
 
 	it("keeps valid saved values", () => {
-		expect(loadSettings({ activeRow: false, mouseRow: false, activeRowColor: "#FFEEAA", mouseRowColor: "#112233" })).toEqual({ activeRow: false, mouseRow: false, activeRowColor: "#ffeeaa", mouseRowColor: "#112233" });
+		expect(loadSettings({ renderedBlocks: false, activeRow: false, mouseRow: false, activeRowColor: "#FFEEAA", mouseRowColor: "#112233" })).toEqual({ renderedBlocks: false, activeRow: false, mouseRow: false, activeRowColor: "#ffeeaa", mouseRowColor: "#112233" });
 	});
 
 	it("drops malformed values", () => {
-		expect(loadSettings({ activeRow: "no", mouseRow: 0, activeRowColor: "red", mouseRowColor: "#12345" })).toEqual(DEFAULT_SETTINGS);
+		expect(loadSettings({ renderedBlocks: 1, activeRow: "no", mouseRow: 0, activeRowColor: "red", mouseRowColor: "#12345" })).toEqual(DEFAULT_SETTINGS);
 	});
 });
 
@@ -31,7 +31,7 @@ describe("bodyState", () => {
 	});
 
 	it("sets variables for custom colours and reflects toggles", () => {
-		const state = bodyState({ activeRow: false, mouseRow: true, activeRowColor: "#ffeeaa", mouseRowColor: "" });
+		const state = bodyState({ renderedBlocks: true, activeRow: false, mouseRow: true, activeRowColor: "#ffeeaa", mouseRowColor: "" });
 		expect(state.classes).toEqual({ [ACTIVE_ROW_CLASS]: false, [MOUSE_ROW_CLASS]: true });
 		expect(state.vars).toEqual({ [ACTIVE_ROW_VAR]: "#ffeeaa", [MOUSE_ROW_VAR]: null });
 	});

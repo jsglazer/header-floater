@@ -1,6 +1,7 @@
 import { debounce, MarkdownRenderChild, Notice, Plugin } from "obsidian";
+import { BlockHosts } from "./block-hosts";
 import { bodyState, DEFAULT_SETTINGS, HeaderFloaterSettings, loadSettings } from "./core/settings";
-import { FitTracker, PIN_CLASS } from "./fit-tracker";
+import { FitTracker, PIN_CLASS, SCROLL_CLASS, TABLE_CLASS } from "./fit-tracker";
 import { HeaderFloaterSettingTab } from "./settings-tab";
 import { tableWatcher } from "./table-watcher";
 
@@ -25,8 +26,24 @@ class TrackedTable extends MarkdownRenderChild {
 	}
 }
 
+/** Keeps a reading-view code-block section watched for its rendered block for as long as the section exists. */
+class TrackedBlockHost extends MarkdownRenderChild {
+	constructor(containerEl: HTMLElement, private readonly blocks: BlockHosts) {
+		super(containerEl);
+	}
+
+	onload(): void {
+		this.blocks.add(this.containerEl);
+	}
+
+	onunload(): void {
+		this.blocks.remove(this.containerEl);
+	}
+}
+
 export default class HeaderFloaterPlugin extends Plugin {
 	private readonly tracker = new FitTracker();
+	private blocks!: BlockHosts;
 	settings: HeaderFloaterSettings = { ...DEFAULT_SETTINGS };
 	// Popout windows get their own body, so highlight classes and colours are applied to each.
 	private readonly bodies = new Set<HTMLElement>();
@@ -35,6 +52,7 @@ export default class HeaderFloaterPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		this.settings = loadSettings(await this.loadData());
+		this.blocks = new BlockHosts(this.tracker, this.settings.renderedBlocks);
 		this.addSettingTab(new HeaderFloaterSettingTab(this.app, this));
 
 		this.bodies.add(document.body);
@@ -58,13 +76,13 @@ export default class HeaderFloaterPlugin extends Plugin {
 			callback: () => this.toggle("mouseRow", "Mouse row highlight"),
 		});
 
-		this.registerEditorExtension(tableWatcher(this.tracker));
+		this.registerEditorExtension(tableWatcher(this.tracker, this.blocks));
 
-		// Reading view wraps each table in a block div that Obsidian sets to scroll sideways.
+		// Reading view wraps each table in a block div that Obsidian sets to scroll sideways, and each code block in a section div that a code block processor renders into.
 		this.registerMarkdownPostProcessor((el, ctx) => {
-			if (el.childElementCount === 1 && el.firstElementChild instanceof HTMLTableElement) {
-				ctx.addChild(new TrackedTable(el, this.tracker));
-			}
+			if (el.childElementCount !== 1) return;
+			if (el.firstElementChild?.tagName === "TABLE") ctx.addChild(new TrackedTable(el, this.tracker));
+			else if (el.classList.contains("el-pre")) ctx.addChild(new TrackedBlockHost(el, this.blocks));
 		});
 
 		const sync = () => this.syncOffsets();
@@ -82,9 +100,11 @@ export default class HeaderFloaterPlugin extends Plugin {
 			for (const name of Object.keys(vars)) body.style.removeProperty(name);
 		}
 		this.bodies.clear();
+		this.blocks.dispose();
 		this.tracker.dispose();
 		for (const { name } of OFFSETS) document.body.style.removeProperty(name);
 		document.querySelectorAll(`.${PIN_CLASS}`).forEach((el) => el.classList.remove(PIN_CLASS));
+		for (const name of [TABLE_CLASS, SCROLL_CLASS]) document.querySelectorAll(`.${name}`).forEach((el) => el.classList.remove(name));
 	}
 
 	private syncOffsets(): void {
@@ -99,6 +119,7 @@ export default class HeaderFloaterPlugin extends Plugin {
 
 	updateSettings(patch: Partial<HeaderFloaterSettings>): void {
 		this.settings = { ...this.settings, ...patch };
+		this.blocks.setEnabled(this.settings.renderedBlocks);
 		this.applyHighlights();
 		this.requestSave();
 	}
