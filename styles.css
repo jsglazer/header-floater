@@ -36,3 +36,27 @@ body {
 .markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th {
 	top: calc(-1 * var(--hf-lp-offset, var(--file-margins-y, 0px)));
 }
+
+/* Row highlights. Each is a translucent layer over the cell's own background, so theme striping shows through; the header row is never tinted. Custom colours from settings are set on body as inline variables. */
+body {
+	--hf-mouse-row-background: var(--background-modifier-hover);
+	--hf-active-row-background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+}
+
+/* Mouse row: any rendered table, in Reading view or Live Preview. Only on devices with a real pointer, so a tap on touch screens doesn't leave a row tinted. */
+@media (hover: hover) {
+	body.hf-mouse-row .markdown-rendered table > tbody > tr:hover > td {
+		background-image: linear-gradient(var(--hf-mouse-row-background), var(--hf-mouse-row-background));
+	}
+}
+
+/* Active row: Obsidian edits a Live Preview table cell in its own small editor inside the cell, so the row holding the cursor is the row with focus inside it. Clears when the editor loses focus, like Obsidian's own row handle. */
+body.hf-active-row .markdown-source-view.mod-cm6 .cm-table-widget table > tbody > tr:focus-within > td {
+	background-image: linear-gradient(var(--hf-active-row-background), var(--hf-active-row-background));
+}
+
+@media (hover: hover) {
+	body.hf-active-row.hf-mouse-row .markdown-source-view.mod-cm6 .cm-table-widget table > tbody > tr:focus-within:hover > td {
+		background-image: linear-gradient(var(--hf-active-row-background), var(--hf-active-row-background)), linear-gradient(var(--hf-mouse-row-background), var(--hf-mouse-row-background));
+	}
+}

@@ -1,7 +1,7 @@
 {
 	"id": "header-floater",
 	"name": "Header Floater",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"minAppVersion": "1.5.12",
 	"description": "Pins table header rows to the top of the pane while you scroll long tables, in Reading view and Live Preview.",
 	"author": "Josh Glazer",

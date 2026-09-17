@@ -2,9 +2,9 @@
 
 > No `UpdateNN.md` was supplied, and the user asked to skip the build pipeline, so per the workflow fallback all activity is logged here.
 
-Version: 1.0.0
+Version: 1.0.1
 
-Closed: 2026-09-17 12:10
+Closed: 2026-09-17 12:22
 
 ## 2026-09-17 — Initial build: replacement for sticky-table-headers 0.3.0
 
@@ -110,7 +110,7 @@ Everything is logged in `header-floater-log.md`.
 I set up the VaultDEV project folder at `~/VaultDEV/2-Projects/Obsidian/header-floater/`, modelled on your other plugin projects and the NewBuild templates:
 
 - **`header-floater Dev.md`:**
-  - Frontmatter: `DevStatus: Stable`, `Version: 1.0.0`, Local and Repo paths, `RepoViz: public`, `LastShipCheck: 2026-09-17`.
+  - Frontmatter: `DevStatus: Stable`, `Version: 1.0.1`, Local and Repo paths, `RepoViz: public`, `LastShipCheck: 2026-09-17`.
   - The New Update button.
   - A Claude Log with the build/deploy entry.
 - **`BuildLog.md`:**
@@ -169,3 +169,87 @@ Plan only. Nothing is built yet, and the version stays at 1.0.0.
 3. **Source mode:** should the cursor's table line also be highlighted there? That would need an editor decoration, which is more work.
 4. **Settings:** are CSS variables enough, or do you want on/off toggles and colour pickers in a settings tab?
 5. **Plugin name:** does this belong in Header Floater, given the name, or in a separate plugin?
+
+## 2026-09-17 12:22 — Build: active-row and mouse-row highlights (v1.0.1)
+
+### Prompt
+> build it.  create settings page and add options to toggle both features; option to select BG color for each; create new commands to Toggle Active Row Highight and Toggle Mouse Row Highlight; build and deploy to VaultShar
+
+### Claude output
+- **Checked the DOM first:** in a temporary Live Preview tab (`Operations.md`), placing the cursor in a table cell focuses a `.cm-content` inside the `td`, so the row matches `tr:focus-within`. Obsidian marks the same row with `mod-active-row-handle`. On blur, both clear.
+- **Open plan questions** the user didn't answer, resolved with defaults:
+  - The active row clears on blur (CSS only, same as Obsidian's handle).
+  - The mouse row applies to all rendered tables.
+  - Source mode is not included.
+  - A custom colour is used as picked, with no opacity setting.
+- **`src/core/settings.ts`:**
+  - Settings interface and defaults (both on, colours `""` = theme default).
+  - `loadSettings` validates saved data (booleans; `#rrggbb` colours, lowercased).
+  - `bodyState` maps settings to body classes (`hf-active-row`, `hf-mouse-row`) and inline variables (`--hf-active-row-background`, `--hf-mouse-row-background`, cleared for theme default).
+  - Covered by 6 new vitest tests (12 total, all pass).
+- **`src/settings-tab.ts`:**
+  - "Row highlights" heading, a toggle for each highlight, and a colour setting for each (colour picker, description, and a reset button shown only when a custom colour is set).
+  - The picker updates the description and reset button in place, since it reports every drag step and redrawing the tab would break the drag.
+- **`src/main.ts`:**
+  - Loads settings and registers the settings tab.
+  - Commands `toggle-active-row-highlight` ("Toggle Active Row Highlight") and `toggle-mouse-row-highlight` ("Toggle Mouse Row Highlight"), each with an on/off Notice.
+  - `updateSettings` applies classes and variables right away, and saves once changes settle (debounced 500ms, flushed on unload).
+  - Highlights are applied to the main body and each popout window's body (`window-open`/`window-close`).
+  - `onunload` removes the classes and variables.
+- **`styles.css`:**
+  - Default variables: accent at 15% via `color-mix` for the active row, `--background-modifier-hover` for the mouse row.
+  - Mouse row: `body.hf-mouse-row .markdown-rendered table > tbody > tr:hover > td`, inside `@media (hover: hover)`.
+  - Active row: `body.hf-active-row .markdown-source-view.mod-cm6 .cm-table-widget table > tbody > tr:focus-within > td`.
+  - A combined rule stacks both layers. Each tint is a `background-image` gradient, so the cell's `background-color` striping stays visible.
+- **Other files:** README gains a "Row highlights" section and the new variables. Version is now 1.0.1 (manifest, package.json, versions.json, Dev file).
+- **Build and deploy:** built (`main.js` 12.3 KB), copied to `~/VaultSchar/.obsidian/plugins/header-floater/`, and reloaded through the CLI.
+- **Live verification:**
+  - Both commands are registered, and body classes are on by default.
+  - **Why a substitute test:** the Obsidian window wasn't in front, so Chromium wouldn't match `:focus-within`/`:hover` from script, and a scripted cursor move no longer opened the cell editor. The plugin's live CSS rules were copied into a temporary stylesheet with those pseudo-classes swapped for test classes, then removed.
+  - **Live Preview:** active row = accent tint layer, hover row = hover layer, both = two layers, other rows `none`.
+  - **Reading view:** hover tints the row, and the active rule doesn't apply there.
+  - **Settings and colours:** turning both settings off clears the tints, and a custom `#ffe08a` applies, then resets.
+  - **Commands:** they flip the classes and the saved setting.
+  - **Settings tab:** renders 4 settings plus the heading, with the reset buttons hidden at theme default.
+  - **Unload:** disable leaves no `hf-` classes, variables or pins. Re-enabled afterwards.
+  - **Data and errors:** `data.json` was restored to defaults, and no new errors were logged.
+  - **Workspace:** the test tab was closed, focus returned to the user's note, and no notes were changed.
+
+### Issue / Fix summary
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | Feature: tint the table row holding the cursor | CSS `tr:focus-within` on Live Preview table widgets, active when body has `hf-active-row`; accent tint layered over cell background |
+| 2 | Feature: tint the table row under the mouse, different colour | CSS `tr:hover` on all rendered tables under `@media (hover: hover)`, active when body has `hf-mouse-row`; theme hover shade; both layers stack when a row is hovered and active |
+| 3 | Feature: settings page with toggles and background colours | `HeaderFloaterSettingTab` with toggle, colour picker and reset per highlight; settings validated by `loadSettings`, applied as body classes and inline CSS variables |
+| 4 | Feature: commands to toggle each highlight | `Toggle Active Row Highlight` and `Toggle Mouse Row Highlight` commands, with notice and saved setting |
+| 5 | Colour picker fires on every drag step; redrawing the tab or writing to disk each step would break the drag and thrash `data.json` | Description and reset button update in place; save debounced 500ms and flushed on unload |
+| 6 | Popout windows have their own body and wouldn't get the classes | Track main and popout bodies via `window-open`/`window-close` and apply to each |
+| 7 | Couldn't trigger real hover/focus from script with the window in the background | Confirmed focus DOM with a real cell editor earlier; verified the exact live rules with pseudo-classes swapped for test classes in both views |
+
+### Final summary delivered to user (verbatim)
+Header Floater 1.0.1 is built, pushed, and deployed to VaultSchar, where it's reloaded and running.
+
+**What's new**
+- **Settings page** (Settings → Header Floater), with two groups:
+  - **Active row highlight:** a toggle and a colour picker.
+  - **Mouse row highlight:** a toggle and a colour picker.
+  - With no colour picked, each highlight follows your theme: a light accent tint for the active row, and the theme's hover shade for the mouse row. Once you pick a colour, a reset button appears to return to the theme colour.
+- **Commands:** `Toggle Active Row Highlight` and `Toggle Mouse Row Highlight`. Each shows a brief on/off notice and saves the setting.
+- **Both highlights are CSS only.** The plugin just switches a class on the page, so nothing runs as you move the mouse or cursor. The tint sits on top of your theme's row striping, and the header row is never tinted. Popout windows get the highlights too.
+
+**Choices I made on the questions you skipped**
+- **Active row:** Live Preview only, and it clears when you click out of the table. That's how Obsidian's own active-row handle behaves.
+- **Mouse row:** applies to every table, including callouts and embeds, but only on devices with a mouse or trackpad.
+- **Source mode:** not included.
+- **Colours:** a picked colour is used exactly as chosen, with no transparency, so choose a light one. If you'd like an opacity slider as well, it's a small addition.
+
+**Verified in your running Obsidian**
+- **The active row is detected:** placing the cursor in a Live Preview cell marks its row as the active one.
+- **Highlights in both views:** hover, active, both at once, a custom colour, each toggle off, and header rows untouched. Obsidian's window wasn't in front, so the browser wouldn't register real mouse hover or cursor focus. I tested the plugin's exact rules with hover and focus swapped for a test marker.
+- **Settings and commands:** the settings page shows all four options. Both commands exist and toggle their highlight.
+- **Clean up:** disabling the plugin removes every class and style it added, and no new errors were logged.
+- **Tests and tabs:** 12 unit tests pass. I used a temporary tab, then closed it and returned focus to your Econ inventory note; no notes were changed.
+
+**Worth trying yourself:** hover a row and click into a cell, since those are the two things I couldn't trigger for real.
+
+Logged in `header-floater-log.md`, and the Dev file version is now 1.0.1.

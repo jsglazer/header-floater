@@ -15,6 +15,17 @@ Obsidian makes each table's box scroll sideways (a stylesheet rule in Live Previ
 
 The pinned header gets your theme's background colour, so it works in both light and dark mode.
 
+## Row highlights
+
+- **Active row highlight:** in Live Preview, tints the table row that holds the cursor while you edit a cell. It clears when the editor loses focus, just as Obsidian's own row handle does.
+- **Mouse row highlight:** tints the table row under the mouse pointer, in Reading view and Live Preview. It's only active on devices with a mouse or trackpad, so a tap on a touch screen doesn't leave a row tinted.
+
+Both are CSS only: the plugin switches a class on `body`, and no code runs as you move the mouse or cursor. Each tint is laid over the cell's own background, so theme striping still shows, and the header row is never tinted.
+
+**Settings** (Settings → Header Floater): a toggle and a colour picker for each highlight. Without a custom colour, the active row uses a light tint of your accent colour and the mouse row uses your theme's hover shade. The reset button returns to that default.
+
+**Commands:** `Toggle Active Row Highlight` and `Toggle Mouse Row Highlight`, which you can bind to hotkeys.
+
 ## Performance compared with other sticky-header plugins
 
 | Concern | Header Floater |
@@ -27,12 +38,14 @@ The pinned header gets your theme's background colour, so it works in both light
 
 ## Customising
 
-Override these variables in a CSS snippet:
+Override these variables in a CSS snippet. A custom colour picked in settings takes precedence over a snippet.
 
 ```css
 body {
 	--hf-header-background: var(--background-primary); /* colour behind a pinned header */
 	--hf-z-index: 3;
+	--hf-active-row-background: color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+	--hf-mouse-row-background: var(--background-modifier-hover);
 }
 ```
 
