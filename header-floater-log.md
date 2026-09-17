@@ -253,3 +253,14 @@ Header Floater 1.0.1 is built, pushed, and deployed to VaultSchar, where it's re
 **Worth trying yourself:** hover a row and click into a cell, since those are the two things I couldn't trigger for real.
 
 Logged in `header-floater-log.md`, and the Dev file version is now 1.0.1.
+
+## 2026-09-17 — Acknowledgement
+
+### Prompt
+> awesome
+
+### Claude output
+- No changes. The late background notification (the stalled cell-focus probe) was confirmed harmless in the previous reply.
+
+### Final summary delivered to user (verbatim)
+Glad it's working. Happy highlighting!
