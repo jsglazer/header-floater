@@ -1,0 +1,29 @@
+{
+	"name": "header-floater",
+	"version": "1.0.0",
+	"description": "Pins table header rows to the top of the pane while you scroll long tables in Obsidian.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs production",
+		"test": "vitest run"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"table",
+		"sticky-header"
+	],
+	"author": "Josh Glazer",
+	"license": "MIT",
+	"devDependencies": {
+		"@codemirror/state": "^6.5.0",
+		"@codemirror/view": "^6.38.6",
+		"@types/node": "^25.9.7",
+		"esbuild": "^0.28.1",
+		"obsidian": "^1.13.1",
+		"tslib": "^2.8.1",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.11"
+	}
+}

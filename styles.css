@@ -1,0 +1,38 @@
+/* Header Floater — pins table header rows while scrolling. Pure CSS: nothing runs on scroll. */
+
+body {
+	/* Solid colour behind a pinned header so rows don't show through. Override in a snippet if needed. */
+	--hf-header-background: var(--background-primary);
+	--hf-z-index: 3;
+}
+
+/* Obsidian makes every table's box scroll sideways (a stylesheet rule in Live Preview, an inline style in Reading view), which blocks pinning. Boxes the plugin marks as fitting their width drop it; wide tables keep scrolling and don't pin. */
+.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin,
+.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin {
+	overflow: visible !important;
+}
+
+/* Top-level tables only: callouts and embeds have their own clipping and scrolling. */
+.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin > table > thead > tr > th,
+.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th {
+	position: sticky;
+	z-index: var(--hf-z-index);
+	/* Theme header tint layered over a solid base, matching the unpinned look. */
+	background-color: var(--hf-header-background);
+	background-image: linear-gradient(var(--table-header-background), var(--table-header-background));
+	/* Collapsed table borders don't travel with sticky cells; draw the bottom edge on the cell itself. */
+	box-shadow: inset 0 calc(-1 * var(--table-border-width, 1px)) 0 var(--table-header-border-color, var(--table-border-color));
+}
+
+.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin > table > thead > tr > th:nth-child(2n + 2),
+.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th:nth-child(2n + 2) {
+	background-image: linear-gradient(var(--table-column-alt-background), var(--table-column-alt-background)), linear-gradient(var(--table-header-background), var(--table-header-background));
+}
+
+.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > div.hf-pin > table > thead > tr > th {
+	top: calc(-1 * var(--hf-rv-offset, var(--file-margins-y, 0px)));
+}
+
+.markdown-source-view.mod-cm6.is-live-preview .cm-table-widget.hf-pin > .table-wrapper > table > thead > tr > th {
+	top: calc(-1 * var(--hf-lp-offset, var(--file-margins-y, 0px)));
+}
