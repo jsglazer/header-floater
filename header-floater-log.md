@@ -4,7 +4,7 @@
 
 Version: 1.0.0
 
-Closed: 2026-09-17 11:28
+Closed: 2026-09-17 12:05
 
 ## 2026-09-17 — Initial build: replacement for sticky-table-headers 0.3.0
 
@@ -88,3 +88,35 @@ Header Floater 1.0.0 is built, pushed to `jsglazer/header-floater` (main), and e
 - **Colour override:** you can change the header colour with `--hf-header-background` in a CSS snippet.
 
 Everything is logged in `header-floater-log.md`.
+
+## 2026-09-17 12:05 — VaultDEV project folder
+
+### Prompt
+> fastantic, it works great. please build out a basic folder structure with Dev file, BuildLog, and Update folder at `/Users/josh/VaultDEV/2-Projects/Obsidian/header-floater/`
+
+### Claude output
+- Copied the layout of the sibling projects (`folder-follow`, `virtual-outliner`) and the `Templates/NewBuild` templates (`projDev.md`, `BuildLog.md`).
+- **`header-floater Dev.md`:** frontmatter filled in (DevStatus Stable, Version 1.0.0, Local, Repo, public, Created, Platform Obsidian, LastShipCheck 2026-09-17), the New Update button, a General section, and a Claude Log with the build/deploy and folder-creation entries.
+- **`BuildLog.md`:** Status Closed. The Gemini stages are marked as skipped (pipeline bypassed), with the plugin review recorded as the audit input. Claude Stage 3 holds the interview decisions; Stage 4 summarizes the build, the live-test findings, and the shipped commits.
+- **`Updates/`:** created empty, ready for `UpdateNNN.md` files.
+- **Resolver check:** `~/.claude/scripts/dev-resolve-project.sh header-floater` resolves the project (exit 0: Dev file, Updates folder, version 1.0.0, repo), so `/dev-deploy` and `/dev-nextupdate` will find it.
+
+### Issue / Fix summary
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | Project had no VaultDEV home, so the Dev skills (deploy, nextupdate, release) couldn't resolve it | Created the Dev file, BuildLog and Updates folder at `~/VaultDEV/2-Projects/Obsidian/header-floater/`, and confirmed the resolver finds it |
+
+### Final summary delivered to user (verbatim)
+I set up the VaultDEV project folder at `~/VaultDEV/2-Projects/Obsidian/header-floater/`, modelled on your other plugin projects and the NewBuild templates:
+
+- **`header-floater Dev.md`:**
+  - Frontmatter: `DevStatus: Stable`, `Version: 1.0.0`, Local and Repo paths, `RepoViz: public`, `LastShipCheck: 2026-09-17`.
+  - The New Update button.
+  - A Claude Log with the build/deploy entry.
+- **`BuildLog.md`:**
+  - Status Closed.
+  - The Gemini interview and audit stages are marked as skipped, since you bypassed the pipeline. The review of the old plugin is recorded as the audit input.
+  - Stages 3–4 hold your interview decisions, the build summary, the reading-view issue found in testing, and the shipped commits.
+- **`Updates/`:** empty, ready for your New Update button.
+
+Your resolver script finds the new project (Dev file, Updates folder, version 1.0.0, repo), so `/dev-deploy header-floater` and `/dev-nextupdate header-floater` will work. I also logged this in the repo's `header-floater-log.md`.
