@@ -65,4 +65,26 @@ Context: the previous exchange reviewed `sticky-table-headers-0.3.0` and found n
 | 9 | Assuming `--file-margins-y` for the pin offset would put Live Preview headers 32px off in this vault (actual scroller padding is 0) | Measure `paddingTop` of the real scrollers on `css-change`/`layout-change`; `--file-margins-y` only as a fallback |
 
 ### Final summary delivered to user (verbatim)
-SUMMARY_PLACEHOLDER
+Header Floater 1.0.0 is built, pushed to `jsglazer/header-floater` (main), and enabled in VaultSchar. I tested it by scrolling real tables in your running Obsidian: headers pin flush to the top of the pane in both Reading view and Live Preview.
+
+**How it avoids the old plugin's problems:** the pinning is done by CSS, so nothing runs while you scroll.
+- **Size checks only when something resizes.** One shared size watcher marks tables that fit their pane. It re-checks a table only when that table or its pane changes size.
+- **Nothing piles up.** Each table is released when its note section or editor goes away. The old plugin kept adding scroll listeners on every layout change.
+- **Every pane is covered.** Each editor watches only for table blocks being added or removed, so it never sees your typing.
+- **Clean unload.** Disabling removes everything. I confirmed nothing was left behind, and re-enabling brought the pins back.
+
+**How it behaves, per your choices:**
+- Tables that fit pin their header. Wide tables keep their sideways scroll and don't pin.
+- The pinned header uses your theme's background, so dark mode works too.
+- Source mode, callouts and embeds are left alone.
+
+**Found during testing:**
+- **Obsidian clips every reading-view table.** It adds an inline sideways-scroll style to each table's wrapper, and that blocks pinning. My first reading-view test failed because of this. The plugin now lifts that style only for tables that fit, and the retest passed.
+- **The original plugin's offset trick doesn't fit your vault.** A snippet or theme sets your editor's top padding to 0 instead of the usual 32px. Header Floater measures the real padding instead of assuming it.
+
+**Other notes:**
+- **Your notes and tabs:** while testing, I briefly opened a few notes in temporary reading-view tabs. I closed them all and gave focus back to your note, and no note content was changed.
+- **Uninstall the old plugin:** if `sticky-table-headers` is installed in any vault, remove it rather than running both.
+- **Colour override:** you can change the header colour with `--hf-header-background` in a CSS snippet.
+
+Everything is logged in `header-floater-log.md`.
